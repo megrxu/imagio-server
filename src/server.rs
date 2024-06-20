@@ -3,13 +3,14 @@ use std::{str::FromStr, sync::Arc};
 use axum::{
     body::Body,
     extract::{Path, State},
-    routing::get,
+    routing::{get, MethodRouter},
     Router,
 };
 use mime_guess::Mime;
 
 use crate::{
     variant::{ImageVariant, Variant},
+    api::*,
     ImagioError, ImagioImage, ImagioState,
 };
 
@@ -48,6 +49,7 @@ pub async fn server(state: Arc<ImagioState>) -> Result<(), ImagioError> {
     let app = Router::new().nest(
         &format!("/{}", token),
         Router::new()
+            .nest("/api", api_router(state.clone()))
             .route("/:uuid/:variant", get(uuid_handler))
             .with_state(state),
     );

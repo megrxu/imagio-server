@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use mime_guess::Mime;
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 
 #[derive(Debug)]
@@ -29,9 +30,10 @@ pub(crate) struct ImagioCli {
     pub(crate) command: ImagioCommand,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ImagioImage {
     pub(crate) uuid: String,
     pub(crate) category: String,
+    #[serde(skip)]
     pub(crate) mime: Mime,
 }

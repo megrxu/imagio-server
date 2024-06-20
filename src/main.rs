@@ -1,6 +1,7 @@
 mod app;
 mod db;
 mod error;
+mod api;
 mod server;
 mod variant;
 use std::sync::Arc;

@@ -7,6 +7,8 @@ pub enum ImagioError {
     DatabaseError(#[from] rusqlite::Error),
     #[error("Not found")]
     NotFound,
+    #[error("Invalid variant: {0}")]
+    InvalidVariant(String),
     #[error("Internal server error: {0}")]
     InternalServerError(#[from] std::io::Error),
 }
