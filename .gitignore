@@ -1,0 +1,6 @@
+/data/cache/*
+!/data/cache/.gitkeep
+/data/images/*
+!/data/images/.gitkeep
+*.db
+/target
