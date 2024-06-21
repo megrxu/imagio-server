@@ -2,14 +2,12 @@ use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::PngEncoder;
 use image::io::Reader as ImageReader;
 use image::{ColorType, DynamicImage, GenericImageView, ImageEncoder};
-use std::fs::File;
-use std::io::{BufWriter, Read, Write};
-use std::path::Path;
+use std::io::BufWriter;
 
 use fast_image_resize::images::Image;
 use fast_image_resize::{IntoImageView, ResizeOptions, Resizer};
 
-use axum::body::{Body, Bytes};
+use axum::body::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::app::ImagioImage;
@@ -50,13 +48,6 @@ impl ToString for Variant {
             Variant::Embed => "embed".to_string(),
             Variant::Original => "original".to_string(),
         }
-    }
-}
-pub trait ImageVariant {
-    fn variant_raw(&self, image: &ImagioImage, variant: Variant) -> Result<Vec<u8>, ImagioError>;
-    fn variant(&self, image: &ImagioImage, variant: Variant) -> Result<Bytes, ImagioError> {
-        let raw = self.variant_raw(image, variant)?;
-        Ok(Bytes::from(raw))
     }
 }
 
@@ -116,32 +107,48 @@ impl Variant {
     }
 }
 
-impl ImageVariant for ImagioState {
-    fn variant_raw(&self, image: &ImagioImage, variant: Variant) -> Result<Vec<u8>, ImagioError> {
-        let original_path = format!("{}/{}", self.store, image.filename(&Variant::Original));
+impl ImagioState {
+    async fn variant_raw(
+        &self,
+        image: &ImagioImage,
+        variant: Variant,
+    ) -> Result<Bytes, ImagioError> {
         match variant {
             Variant::Original => {
-                let mut file = File::open(original_path).unwrap();
-                let mut contents = Vec::new();
-                file.read_to_end(&mut contents).unwrap();
-                Ok(contents)
+                let filename = image.filename(&Variant::Original);
+                let buf = self.storage.store.read(&filename).await?;
+                Ok(buf.to_bytes())
             }
             variant => {
                 // check if the cached file exists
-                let variant_path = format!("{}/{}", self.cache, image.filename(&variant));
-                tracing::info!("Checking for cached variant at: {}", variant_path);
-                if let Ok(mut file) = File::open(variant_path) {
-                    let mut contents = Vec::new();
-                    file.read_to_end(&mut contents)?;
-                    return Ok(contents);
+                let filename = image.filename(&variant);
+                tracing::info!("Checking for cached variant at: {}", filename);
+                if let Ok(true) = self.storage.cache.is_exist(&filename).await {
+                    let buf = self.storage.cache.read(&filename).await?;
+                    return Ok(buf.to_bytes());
                 }
-                let img = ImageReader::open(original_path)?.decode()?;
+                let original = image.filename(&Variant::Original);
+                let buf = self.storage.store.read(&original).await?;
+
+                let img = ImageReader::new(std::io::Cursor::new(buf.to_bytes()))
+                    .with_guessed_format()?
+                    .decode()?;
                 let bytes = variant.transform(img);
                 // Write the variant image to the store
-                image.store(&bytes, self.cache.clone(), image.filename(&variant))?;
-                Ok(bytes.to_vec())
+                image
+                    .store(bytes.clone(), self.storage.cache.clone(), &filename)
+                    .await?;
+                Ok(bytes)
             }
         }
+    }
+
+    pub(crate) async fn variant(
+        &self,
+        image: &ImagioImage,
+        variant: Variant,
+    ) -> Result<Bytes, ImagioError> {
+        self.variant_raw(image, variant).await
     }
 }
 

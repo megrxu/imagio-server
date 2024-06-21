@@ -7,11 +7,7 @@ use axum::{
     Router,
 };
 
-use crate::{
-    api::*,
-    variant::{ImageVariant, Variant},
-    ImagioError, ImagioState,
-};
+use crate::{api::*, variant::Variant, ImagioError, ImagioState};
 
 pub async fn uuid_handler(
     Path((uuid, variant)): Path<(String, Variant)>,
@@ -19,16 +15,16 @@ pub async fn uuid_handler(
 ) -> axum::response::Result<Body, ImagioError> {
     tracing::info!("Requesting image with uuid: {}", uuid);
     let image = state.get(&uuid).await?;
-    let body = state.variant(&image, variant)?;
+    let body = state.variant(&image, variant).await?;
     return Ok(Body::from(body));
 }
 
 pub async fn server(state: Arc<ImagioState>) -> Result<(), ImagioError> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:4000").await?;
+    let account_id = state.slug.clone();
 
-    let token = state.token.clone();
     let app = Router::new().nest(
-        &format!("/{}", token),
+        &format!("/{}", account_id),
         Router::new()
             .nest("/api", api_router(state.clone()))
             .route("/:uuid/:variant", get(uuid_handler))

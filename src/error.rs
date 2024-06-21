@@ -15,6 +15,8 @@ pub enum ImagioError {
     MultipartError(#[from] axum::extract::multipart::MultipartError),
     #[error("Image Error: {0}")]
     ImageError(#[from] image::ImageError),
+    #[error("Opendal Error: {0}")]
+    OpendalError(#[from] opendal::Error),
 }
 
 impl axum::response::IntoResponse for ImagioError {
@@ -24,7 +26,7 @@ impl axum::response::IntoResponse for ImagioError {
         let (status, body) = match self {
             NotFound => (StatusCode::NOT_FOUND, format!("Not found")),
             MultipartError(_) => (StatusCode::BAD_REQUEST, format!("Bad request")),
-            DatabaseError(_) | IoError(_) | MimeError(_) | ImageError(_) => (
+            DatabaseError(_) | IoError(_) | MimeError(_) | ImageError(_) | OpendalError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Internal server error"),
             ),

@@ -30,7 +30,7 @@ async fn main() -> Result<(), ImagioError> {
             generate()?;
         }
         ImagioCommand::Serve => {
-            let state = ImagioState::new(cli);
+            let state = ImagioState::new(cli)?;
             let async_state = Arc::new(state);
             tracing::info!("Starting server at http://localhost:4000");
             server(async_state).await?;

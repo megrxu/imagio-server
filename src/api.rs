@@ -1,4 +1,4 @@
-use std::{io::Write, str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use axum::{
     extract::{Multipart, Path, State},
@@ -6,18 +6,16 @@ use axum::{
     routing::{delete, get, put},
     Json, Router,
 };
-use chrono::Utc;
 use image::io::Reader as ImageReader;
-use mime_guess::Mime;
 
 use crate::{variant::Variant, ImagioError, ImagioImage, ImagioState};
 
 async fn list_images_handler(
     State(state): State<Arc<ImagioState>>,
-    Path((limit, skip)): Path<(usize, usize)>,
+    Path((category, limit, skip)): Path<(String, usize, usize)>,
 ) -> Result<Json<Vec<ImagioImage>>, ImagioError> {
     tracing::info!("Requesting list of images");
-    let images = state.list(limit, skip).await?;
+    let images = state.list(category, limit, skip).await?;
     Ok(Json(images))
 }
 
@@ -46,11 +44,13 @@ async fn put_image_handler(
         let image = ImagioImage::new(&uuid, &category, &mime_str)?;
 
         // Write the image to the store
-        image.store(
-            &data,
-            state.store.clone(),
-            image.filename(&Variant::Original),
-        )?;
+        image
+            .store(
+                data,
+                state.storage.store.clone(),
+                &image.filename(&Variant::Original),
+            )
+            .await?;
 
         // Save the image to the database
         state.put(&image).await?;
@@ -67,7 +67,7 @@ async fn delete_image_handler(State(state): State<Arc<ImagioState>>, Path(uuid):
 pub fn api_router(state: Arc<ImagioState>) -> Router<Arc<ImagioState>> {
     Router::new()
         // List images
-        .route("/images/:limit/:skip", get(list_images_handler))
+        .route("/images/:category/:limit/:skip", get(list_images_handler))
         // Get image by uuid
         .route("/image/:uuid", get(get_image_handler))
         // Upload image to category
