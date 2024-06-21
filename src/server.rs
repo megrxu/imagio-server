@@ -23,13 +23,13 @@ pub async fn server(state: Arc<ImagioState>) -> Result<(), ImagioError> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:4000").await?;
     let account_id = state.slug.clone();
 
-    let app = Router::new().nest(
-        &format!("/{}", account_id),
-        Router::new()
-            .nest("/api", api_router(state.clone()))
-            .route("/:uuid/:variant", get(uuid_handler))
-            .with_state(state),
-    );
+    let app = Router::new()
+        .route("/:uuid/:variant", get(uuid_handler))
+        .nest(
+            &format!("/{}", account_id),
+            Router::new().nest("/api", api_router(state.clone())),
+        )
+        .with_state(state);
 
     axum::serve(listener, app).await?;
     Ok(())
