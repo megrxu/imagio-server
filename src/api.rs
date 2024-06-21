@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{DefaultBodyLimit, Multipart, Path, State},
     response::Result,
     routing::{delete, get, put},
     Json, Router,
@@ -75,4 +75,6 @@ pub fn api_router(state: Arc<ImagioState>) -> Router<Arc<ImagioState>> {
         // Delete image by uuid
         .route("/image/:uuid", delete(delete_image_handler))
         .with_state(state)
+        .layer(DefaultBodyLimit::disable())
+        .layer(DefaultBodyLimit::max(10 * 1000 * 10))
 }
