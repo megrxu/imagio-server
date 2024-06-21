@@ -1,9 +1,10 @@
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::PngEncoder;
 use image::io::Reader as ImageReader;
-use image::{ColorType, GenericImageView, ImageEncoder};
+use image::{ColorType, DynamicImage, GenericImageView, ImageEncoder};
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
+use std::path::Path;
 
 use fast_image_resize::images::Image;
 use fast_image_resize::{IntoImageView, ResizeOptions, Resizer};
@@ -12,9 +13,9 @@ use axum::body::{Body, Bytes};
 use serde::{Deserialize, Serialize};
 
 use crate::app::ImagioImage;
-use crate::ImagioError;
+use crate::{ImagioError, ImagioState};
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum Variant {
     Public,
@@ -51,25 +52,16 @@ impl ToString for Variant {
         }
     }
 }
-
-pub trait Original {
-    fn original(&self) -> String;
-}
-
 pub trait ImageVariant {
-    fn variant(&self, variant: Variant) -> Result<Body, ImagioError>;
-}
-
-impl Original for ImagioImage {
-    fn original(&self) -> String {
-        let ext = self.mime.subtype().to_string().to_uppercase();
-        format!("data/images/{}/{}.{}", self.category, self.uuid, ext)
+    fn variant_raw(&self, image: &ImagioImage, variant: Variant) -> Result<Vec<u8>, ImagioError>;
+    fn variant(&self, image: &ImagioImage, variant: Variant) -> Result<Bytes, ImagioError> {
+        let raw = self.variant_raw(image, variant)?;
+        Ok(Bytes::from(raw))
     }
 }
 
 impl Variant {
-    pub fn transform(&self, path: &str) -> Bytes {
-        let img = ImageReader::open(path).unwrap().decode().unwrap();
+    pub fn transform(&self, img: DynamicImage) -> Bytes {
         let (width, height) = img.dimensions();
         // Create container for data of destination image
         let (dst_width, dst_height) = match self {
@@ -83,7 +75,6 @@ impl Variant {
         // Create container for data of destination image
         let mut dst_image = Image::new(dst_width, dst_height, img.pixel_type().unwrap());
 
-        tracing::info!("Starting transformation of {} to {:?}", path, self);
         let mut resizer = Resizer::new();
         resizer
             .resize(
@@ -92,7 +83,6 @@ impl Variant {
                 &ResizeOptions::new().fit_into_destination(None),
             )
             .unwrap();
-        tracing::info!("Finished transformation of {} to {:?}", path, self);
 
         // Write destination image as PNG-file
         tracing::info!("Starting encoding to Jpeg.");
@@ -126,74 +116,35 @@ impl Variant {
     }
 }
 
-impl ImageVariant for ImagioImage {
-    fn variant(&self, variant: Variant) -> Result<Body, ImagioError> {
-        let original = self.original();
+impl ImageVariant for ImagioState {
+    fn variant_raw(&self, image: &ImagioImage, variant: Variant) -> Result<Vec<u8>, ImagioError> {
+        let original_path = format!("{}/{}", self.store, image.filename(&Variant::Original));
         match variant {
             Variant::Original => {
-                let mut file = File::open(original).unwrap();
+                let mut file = File::open(original_path).unwrap();
                 let mut contents = Vec::new();
                 file.read_to_end(&mut contents).unwrap();
-                Ok(Body::from(Bytes::from(contents)))
+                Ok(contents)
             }
             variant => {
                 // check if the cached file exists
-                if let Ok(mut file) = File::open(format!(
-                    "data/cache/{}_{}_{}.{}",
-                    self.category,
-                    self.uuid,
-                    variant.to_string(),
-                    self.mime.subtype()
-                )) {
+                let variant_path = format!("{}/{}", self.cache, image.filename(&variant));
+                tracing::info!("Checking for cached variant at: {}", variant_path);
+                if let Ok(mut file) = File::open(variant_path) {
                     let mut contents = Vec::new();
                     file.read_to_end(&mut contents)?;
-                    return Ok(Body::from(Bytes::from(contents)));
+                    return Ok(contents);
                 }
-                tracing::info!(
-                    "Transforming {} to variant {}.",
-                    self.uuid,
-                    variant.to_string()
-                );
-                let bytes = variant.transform(&original);
-                // write the bytes to the cached file
-                let mut file = File::create(format!(
-                    "data/cache/{}_{}_{}.jpeg",
-                    self.category,
-                    self.uuid,
-                    variant.to_string(),
-                ))?;
-                file.write_all(&bytes)?;
-                Ok(Body::from(bytes))
+                let img = ImageReader::open(original_path)?.decode()?;
+                let bytes = variant.transform(img);
+                // Write the variant image to the store
+                image.store(&bytes, self.cache.clone(), image.filename(&variant))?;
+                Ok(bytes.to_vec())
             }
         }
     }
 }
 
 pub fn generate() -> Result<(), ImagioError> {
-    // list all categories
-    let categories = std::fs::read_dir("data/images")?;
-
-    // for each category, list all images
-    for category in categories {
-        let category = category?;
-        let category_name = category.file_name().into_string().unwrap();
-        let images = std::fs::read_dir(category.path())?;
-
-        for image in images {
-            let image = image?;
-            let image_name = image.file_name().into_string().unwrap();
-            let uuid = image_name.split(".").next().unwrap();
-            let mime = mime_guess::from_path(&image.path()).first_or_octet_stream();
-            let image = ImagioImage {
-                uuid: uuid.to_string(),
-                category: category_name.clone(),
-                mime,
-            };
-
-            for variant in [Variant::Public, Variant::Square, Variant::Embed] {
-                let _ = image.variant(variant);
-            }
-        }
-    }
     Ok(())
 }

@@ -1,17 +1,16 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use axum::{
     body::Body,
     extract::{Path, State},
-    routing::{get, MethodRouter},
+    routing::get,
     Router,
 };
-use mime_guess::Mime;
 
 use crate::{
-    variant::{ImageVariant, Variant},
     api::*,
-    ImagioError, ImagioImage, ImagioState,
+    variant::{ImageVariant, Variant},
+    ImagioError, ImagioState,
 };
 
 pub async fn uuid_handler(
@@ -19,27 +18,9 @@ pub async fn uuid_handler(
     State(state): State<Arc<ImagioState>>,
 ) -> axum::response::Result<Body, ImagioError> {
     tracing::info!("Requesting image with uuid: {}", uuid);
-    let lock = state.db.read().await;
-    let conn = &lock.lock().await;
-    let mut stmt = conn
-        .prepare("SELECT category, mime FROM images WHERE uuid = ?")
-        .unwrap();
-    let mut rows = stmt.query(&[&uuid.to_string()]).unwrap();
-
-    let row = rows.next().unwrap();
-    if let Some(row) = row {
-        let category: String = row.get(0).unwrap();
-        let mime: String = row.get(1).unwrap();
-        let image = ImagioImage {
-            uuid: uuid.to_string(),
-            category,
-            mime: Mime::from_str(&mime).unwrap(),
-        };
-        let body = image.variant(variant)?;
-        return Ok(body);
-    } else {
-        return Err(ImagioError::NotFound);
-    }
+    let image = state.get(&uuid).await?;
+    let body = state.variant(&image, variant)?;
+    return Ok(Body::from(body));
 }
 
 pub async fn server(state: Arc<ImagioState>) -> Result<(), ImagioError> {

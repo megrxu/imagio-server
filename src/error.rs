@@ -3,25 +3,31 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ImagioError {
-    #[error("Database error: {0}")]
-    DatabaseError(#[from] rusqlite::Error),
     #[error("Not found")]
     NotFound,
-    #[error("Invalid variant: {0}")]
-    InvalidVariant(String),
-    #[error("Internal server error: {0}")]
-    InternalServerError(#[from] std::io::Error),
+    #[error("Database Error: {0}")]
+    DatabaseError(#[from] rusqlite::Error),
+    #[error("Io Error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("Mime Guess Error: {0}")]
+    MimeError(#[from] mime_guess::mime::FromStrError),
+    #[error("Multipart Error: {0}")]
+    MultipartError(#[from] axum::extract::multipart::MultipartError),
+    #[error("Image Error: {0}")]
+    ImageError(#[from] image::ImageError),
 }
 
 impl axum::response::IntoResponse for ImagioError {
     fn into_response(self) -> axum::http::Response<Body> {
+        use ImagioError::*;
+        tracing::error!("{:?}", self);
         let (status, body) = match self {
-            ImagioError::DatabaseError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Database error"),
-            ImagioError::NotFound => (StatusCode::NOT_FOUND, "Not found"),
-            ImagioError::InvalidVariant(_) => (StatusCode::BAD_REQUEST, "Invalid variant"),
-            ImagioError::InternalServerError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
-            }
+            NotFound => (StatusCode::NOT_FOUND, format!("Not found")),
+            MultipartError(_) => (StatusCode::BAD_REQUEST, format!("Bad request")),
+            DatabaseError(_) | IoError(_) | MimeError(_) | ImageError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal server error"),
+            ),
         };
         axum::http::Response::builder()
             .status(status)
