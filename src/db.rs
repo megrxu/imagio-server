@@ -3,11 +3,9 @@ use rusqlite::Connection;
 use crate::{ImagioImage, ImagioError};
 
 pub fn init_db(path: &str, force: bool) -> rusqlite::Result<()> {
-    if !force {
-        if std::path::Path::new(path).exists() {
-            tracing::warn!("Database already exists, skipping init");
-            return Ok(());
-        }
+    if !force && std::path::Path::new(path).exists() {
+        tracing::warn!("Database already exists, skipping init");
+        return Ok(());
     }
     let conn = Connection::open(path)?;
     let sql = include_str!("../schema.sql");
@@ -31,7 +29,7 @@ pub fn refresh(db_path: &str) -> Result<(), ImagioError> {
         for image in images {
             let image = image?;
             let image_name = image.file_name().into_string().unwrap();
-            let uuid = image_name.split(".").next().unwrap();
+            let uuid = image_name.split('.').next().unwrap();
             let mime = mime_guess::from_path(&image.path()).first_or_octet_stream();
             let image = ImagioImage {
                 uuid: uuid.to_string(),
@@ -43,7 +41,7 @@ pub fn refresh(db_path: &str) -> Result<(), ImagioError> {
                 "INSERT INTO images (uuid, category, mime, create_time) VALUES (?, ?, ?, ?)",
             )?;
             let now = chrono::Utc::now();
-            stmt.execute(&[
+            stmt.execute([
                 &image.uuid,
                 &image.category,
                 &image.mime.to_string(),

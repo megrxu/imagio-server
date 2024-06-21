@@ -36,12 +36,12 @@ async fn put_image_handler(
     let uuid = uuid::Uuid::new_v4().to_string();
 
     // Upload the image to local
-    while let Ok(Some(field)) = payload.next_field().await {
+    if let Ok(Some(field)) = payload.next_field().await {
         let data = field.bytes().await?.to_vec();
         let image_blob =
             ImageReader::new(std::io::Cursor::new(data.clone())).with_guessed_format()?;
         let mime_str = image_blob.format().unwrap().to_mime_type();
-        let image = ImagioImage::new(&uuid, &category, &mime_str)?;
+        let image = ImagioImage::new(&uuid, &category, mime_str)?;
 
         // Write the image to the store
         image
@@ -57,7 +57,7 @@ async fn put_image_handler(
         return Ok(Json(image));
     }
 
-    return Err(ImagioError::NotFound);
+    Err(ImagioError::NotFound)
 }
 
 async fn delete_image_handler(State(state): State<Arc<ImagioState>>, Path(uuid): Path<String>) {

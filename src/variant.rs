@@ -38,15 +38,15 @@ impl From<&str> for Variant {
     }
 }
 
-impl ToString for Variant {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for Variant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Variant::Public => "public".to_string(),
-            Variant::Thumb => "thumb".to_string(),
-            Variant::Square => "square".to_string(),
-            Variant::Banner => "banner".to_string(),
-            Variant::Embed => "embed".to_string(),
-            Variant::Original => "original".to_string(),
+            Variant::Public => write!(f, "public"),
+            Variant::Thumb => write!(f, "thumb"),
+            Variant::Square => write!(f, "square"),
+            Variant::Banner => write!(f, "banner"),
+            Variant::Embed => write!(f, "embed"),
+            Variant::Original => write!(f, "original"),
         }
     }
 }

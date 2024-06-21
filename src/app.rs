@@ -1,9 +1,9 @@
 use std::{path::Path, str::FromStr};
 
 use chrono::Utc;
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use mime_guess::Mime;
-use rusqlite::{Connection, Params};
+use rusqlite::{Connection};
 use serde::Serialize;
 use tokio::sync::{Mutex, RwLock};
 
@@ -105,7 +105,7 @@ impl ImagioImage {
                 "{}_{}_{}.{}",
                 self.category,
                 self.uuid,
-                var.to_string(),
+                var,
                 self.ext()
             ),
         }
@@ -196,13 +196,13 @@ impl ImagioState {
         let lock = self.db.read().await;
         let conn = &lock.lock().await;
         let mut stmt = conn.prepare("SELECT uuid, category, mime FROM images WHERE uuid = ?")?;
-        let mut rows = stmt.query(&[&uuid])?;
+        let mut rows = stmt.query([&uuid])?;
 
-        while let Some(row) = rows.next()? {
+        if let Some(row) = rows.next()? {
             let image = ImagioImage::try_from(row)?;
             return Ok(image);
         }
-        return Err(ImagioError::NotFound);
+        Err(ImagioError::NotFound)
     }
 
     pub(crate) async fn put(&self, image: &ImagioImage) -> Result<(), ImagioError> {
@@ -211,7 +211,7 @@ impl ImagioState {
         let mut stmt = conn.prepare(
             "INSERT INTO images (uuid, category, mime, create_time) VALUES (?, ?, ?, ?)",
         )?;
-        let _ = stmt.execute(&[
+        let _ = stmt.execute([
             &image.uuid,
             &image.category,
             &image.mime.to_string(),
@@ -226,7 +226,7 @@ impl ImagioState {
             let conn = &lock.lock().await;
             let mut stmt =
                 conn.prepare("SELECT uuid, category, mime FROM images WHERE uuid = ?")?;
-            let mut rows = stmt.query(&[&uuid])?;
+            let mut rows = stmt.query([&uuid])?;
 
             if let Some(row) = rows.next()? {
                 ImagioImage::try_from(row)?
@@ -245,7 +245,7 @@ impl ImagioState {
             let lock = self.db.write().await;
             let conn = &lock.lock().await;
             let mut stmt = conn.prepare("DELETE FROM images WHERE uuid = ?")?;
-            let _ = stmt.execute(&[&uuid])?;
+            let _ = stmt.execute([&uuid])?;
         }
 
         Ok(image)

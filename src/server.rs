@@ -16,7 +16,7 @@ pub async fn uuid_handler(
     tracing::info!("Requesting image with uuid: {}", uuid);
     let image = state.get(&uuid).await?;
     let body = state.variant(&image, variant).await?;
-    return Ok(Body::from(body));
+    Ok(Body::from(body))
 }
 
 pub async fn server(state: Arc<ImagioState>) -> Result<(), ImagioError> {

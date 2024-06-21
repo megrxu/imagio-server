@@ -24,11 +24,11 @@ impl axum::response::IntoResponse for ImagioError {
         use ImagioError::*;
         tracing::error!("{:?}", self);
         let (status, body) = match self {
-            NotFound => (StatusCode::NOT_FOUND, format!("Not found")),
-            MultipartError(_) => (StatusCode::BAD_REQUEST, format!("Bad request")),
+            NotFound => (StatusCode::NOT_FOUND, "Not found".to_string()),
+            MultipartError(_) => (StatusCode::BAD_REQUEST, "Bad request".to_string()),
             DatabaseError(_) | IoError(_) | MimeError(_) | ImageError(_) | OpendalError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Internal server error"),
+                "Internal server error".to_string(),
             ),
         };
         axum::http::Response::builder()
