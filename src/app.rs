@@ -3,7 +3,7 @@ use std::{path::Path, str::FromStr};
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use mime_guess::Mime;
-use rusqlite::{Connection};
+use rusqlite::Connection;
 use serde::Serialize;
 use tokio::sync::{Mutex, RwLock};
 
@@ -15,6 +15,7 @@ pub(crate) struct ImagioState {
     pub(crate) db: RwLock<Mutex<Connection>>,
     pub(crate) slug: String,
     pub(crate) storage: ImagioStorageOperator,
+    pub(crate) bind: String,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -66,6 +67,8 @@ pub(crate) struct ImagioCli {
     pub(crate) storage: ImagioStorage,
     #[clap(long, default_value = "pBxTJTxHRtQetTGf")]
     pub(crate) account_id: String,
+    #[clap(long, default_value = "localhost:4000")]
+    pub(crate) bind: String,
     #[clap(subcommand)]
     pub(crate) command: ImagioCommand,
 }
@@ -101,13 +104,7 @@ impl ImagioImage {
     pub(crate) fn filename(&self, variant: &Variant) -> String {
         match variant {
             Variant::Original => format!("{}/{}.{}", self.category, self.uuid, self.ext()),
-            var => format!(
-                "{}_{}_{}.{}",
-                self.category,
-                self.uuid,
-                var,
-                self.ext()
-            ),
+            var => format!("{}_{}_{}.{}", self.category, self.uuid, var, self.ext()),
         }
     }
 
@@ -162,6 +159,7 @@ impl ImagioState {
                 ImagioStorageOperator { cache, store }
             }
             ImagioStorageBackend::S3 => {
+                // Store
                 let mut store_builder = opendal::services::S3::default();
                 store_builder.region(&cli.storage.parameters.region.clone().unwrap());
                 store_builder.bucket(&cli.storage.parameters.bucket.clone().unwrap());
@@ -170,8 +168,8 @@ impl ImagioState {
                 store_builder
                     .secret_access_key(&cli.storage.parameters.secret_access_key.clone().unwrap());
                 store_builder.root(&cli.storage.parameters.store);
-                let store = Operator::new(store_builder)?.finish();
 
+                // Cache
                 let mut cache_builder = opendal::services::S3::default();
                 cache_builder.region(&cli.storage.parameters.region.unwrap());
                 cache_builder.bucket(&cli.storage.parameters.bucket.unwrap());
@@ -180,6 +178,8 @@ impl ImagioState {
                 cache_builder
                     .secret_access_key(&cli.storage.parameters.secret_access_key.clone().unwrap());
                 cache_builder.root(&cli.storage.parameters.cache);
+
+                let store = Operator::new(store_builder)?.finish();
                 let cache = Operator::new(cache_builder)?.finish();
                 ImagioStorageOperator { cache, store }
             }
@@ -189,6 +189,7 @@ impl ImagioState {
             db,
             slug: cli.account_id,
             storage,
+            bind: cli.bind,
         })
     }
 

@@ -54,6 +54,7 @@ async fn put_image_handler(
 
         // Save the image to the database
         state.put(&image).await?;
+        tracing::info!("New image uploaded with uuid: {}", uuid);
         return Ok(Json(image));
     }
 

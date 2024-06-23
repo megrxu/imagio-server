@@ -1,14 +1,11 @@
 mod api;
 mod app;
-mod db;
 mod error;
 mod server;
 mod variant;
-use std::sync::Arc;
 
 use app::*;
 use clap::Parser;
-use db::*;
 use error::*;
 use server::*;
 use variant::generate;
@@ -20,10 +17,8 @@ async fn main() -> Result<(), ImagioError> {
     tracing_subscriber::fmt::fmt().init();
 
     match cli.command {
-        ImagioCommand::Init { force } => {
+        ImagioCommand::Init { .. } => {
             tracing::info!("Initializing database");
-            init_db(&cli.db, force)?;
-            refresh(&cli.db)?;
         }
         ImagioCommand::Generate => {
             tracing::info!("Generating variants");
@@ -31,8 +26,8 @@ async fn main() -> Result<(), ImagioError> {
         }
         ImagioCommand::Serve => {
             let state = ImagioState::new(cli)?;
-            let async_state = Arc::new(state);
-            tracing::info!("Starting server at http://localhost:4000");
+            let async_state = std::sync::Arc::new(state);
+            tracing::info!("Starting server at {}", async_state.bind);
             server(async_state).await?;
         }
     }

@@ -20,7 +20,7 @@ pub async fn uuid_handler(
 }
 
 pub async fn server(state: Arc<ImagioState>) -> Result<(), ImagioError> {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:4000").await?;
+    let listener = tokio::net::TcpListener::bind(&state.bind).await?;
     let account_id = state.slug.clone();
 
     let app = Router::new()
